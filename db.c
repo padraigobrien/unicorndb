@@ -41,7 +41,7 @@ enum MetaCommandResult_t {
 };
 typedef enum MetaCommandResult_t MetaCommandResult;
 
-enum PrepareResult_t { PREPARE_SUCCESS, PREPARE_UNRECOGNIZED_STATEMENT };
+enum PrepareResult_t { PREPARE_SUCCESS, PREPARE_UNRECOGNIZED_STATEMENT, PREPARE_SYNTAX_ERROR };
 typedef enum PrepareResult_t PrepareResult;
 
 MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
@@ -52,18 +52,36 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
   }
 }
 
+const uint32_t  COLUMN_USERNAME_SIZE = 32;
+const uint32_t COLUMN_EMAIL_SIZE = 255;
+struct Row_t {
+  uint32_t id;
+  char username[COLUMN_USERNAME_SIZE];
+  char email[COLUMN_EMAIL_SIZE];
+};
+
+typedef struct Row_t Row;
+
+Row row_to_insert;
+
 enum StatementType_t { STATEMENT_INSERT, STATEMENT_SELECT };
 typedef enum StatementType_t StatementType;
 
 struct Statement_t {
   StatementType type;
+  Row row_to_insert;
 };
 typedef struct Statement_t Statement;
+
 
 PrepareResult prepare_statement(InputBuffer* input_buffer,
                                 Statement* statement) {
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
     statement->type = STATEMENT_INSERT;
+    int args_assigned = sscanf(input_buffer->buffer, "insert %d %s %s", &(statement->row_to_insert.id), statement->row_to_insert.username, statement->row_to_insert.email);
+    if (args_assigned < 3) {
+      return PREPARE_SYNTAX_ERROR;
+    }
     return PREPARE_SUCCESS;
   }
   if (strcmp(input_buffer->buffer, "select") == 0) {
@@ -109,9 +127,11 @@ int main(int argc, char* argv[]) {
     switch (prepare_statement(input_buffer, &statement)) {
       case (PREPARE_SUCCESS):
         break;
+       case (PREPARE_SYNTAX_ERROR):
+        break;  
       case (PREPARE_UNRECOGNIZED_STATEMENT):
         printf("Unrecognized keyword at start of '%s'.\n",
-               input_buffer->buffer);
+               input_buffer->buffer);              
         continue;
    }
 
